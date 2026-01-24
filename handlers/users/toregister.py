@@ -2,19 +2,128 @@ from aiogram import types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
-from loader import dp
+from loader import dp, bot
 from states.register import Registration
 from keyboards.inline.buttons import get_yunalish_keyboard, confirm_keyboard, YUNALISHLAR
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, Alignment, Border, Side
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import os
 import json
 
 # ============ Sozlamalar ============
 EXCEL_FILE = "royxatlar__.xlsx"
 ADMINS_FILE = "admins.json"
-SUPER_ADMIN = 736290914  # Asosiy admin - bu odam hamma narsani qila oladi
+SUPER_ADMIN = 736290914  # Asosiy admin
+
+# ============ KANALLAR RO'YXATI ============
+# Yangi kanal qo'shish uchun # belgisini olib tashla va ma'lumotlarni yoz
+
+CHANNELS = [
+    # 1-kanal: https://t.me/Samstf
+    ("Samarqand yoshlar ishlari", "Samstf"),
+
+    # 2-kanal: https://t.me/yiasamyosh
+    # ("Yoshlar ilhom akademiyasi", "yiasamyosh"),
+
+    # 3-kanal: https://t.me/...
+    # ("Kanal nomi", "kanal_username"),
+
+    # 4-kanal: https://t.me/...
+    # ("Kanal nomi", "kanal_username"),
+
+    # 5-kanal: https://t.me/...
+    # ("Kanal nomi", "kanal_username"),
+]
+
+
+# ============ OBUNA TEKSHIRISH ============
+
+async def check_subscription(user_id: int) -> dict:
+    """Foydalanuvchi barcha kanallarga obuna bo'lganini tekshirish"""
+    not_subscribed = []
+
+    for channel_name, channel_username in CHANNELS:
+        try:
+            member = await bot.get_chat_member(
+                chat_id=f"@{channel_username}",
+                user_id=user_id
+            )
+
+            if member.status in ["left", "kicked"]:
+                not_subscribed.append({
+                    "name": channel_name,
+                    "username": channel_username
+                })
+
+        except Exception as e:
+            print(f"Kanal tekshirishda xatolik ({channel_username}): {e}")
+            not_subscribed.append({
+                "name": channel_name,
+                "username": channel_username
+            })
+
+    return {
+        "is_subscribed": len(not_subscribed) == 0,
+        "not_subscribed": not_subscribed
+    }
+
+
+def get_subscribe_keyboard(not_subscribed: list) -> InlineKeyboardMarkup:
+    """Obuna bo'lish tugmalarini yaratish"""
+    keyboard = InlineKeyboardMarkup(row_width=1)
+
+    for channel in not_subscribed:
+        keyboard.add(
+            InlineKeyboardButton(
+                text=f"📢 {channel['name']}",
+                url=f"https://t.me/{channel['username']}"
+            )
+        )
+
+    keyboard.add(
+        InlineKeyboardButton(
+            text="✅ Tekshirish",
+            callback_data="check_subscription"
+        )
+    )
+
+    return keyboard
+
+
+async def check_and_request_subscription(message: types.Message) -> bool:
+    """Obunani tekshirish"""
+    result = await check_subscription(message.from_user.id)
+
+    if not result["is_subscribed"]:
+        await message.answer(
+            "⚠️ <b>Botdan foydalanish uchun quyidagi kanallarga obuna bo'ling:</b>",
+            reply_markup=get_subscribe_keyboard(result["not_subscribed"])
+        )
+        return False
+
+    return True
+
+
+@dp.callback_query_handler(text="check_subscription", state="*")
+async def callback_check_subscription(callback: types.CallbackQuery, state: FSMContext):
+    """Obunani qayta tekshirish"""
+    result = await check_subscription(callback.from_user.id)
+
+    if result["is_subscribed"]:
+        await callback.message.edit_text(
+            "✅ <b>Rahmat! Siz barcha kanallarga obuna bo'ldingiz.</b>\n\n"
+            "📝 Ro'yxatdan o'tish uchun /register buyrug'ini bosing."
+        )
+    else:
+        await callback.message.edit_text(
+            "⚠️ <b>Siz hali barcha kanallarga obuna bo'lmadingiz!</b>\n\n"
+            "Quyidagi kanallarga obuna bo'ling:",
+            reply_markup=get_subscribe_keyboard(result["not_subscribed"])
+        )
+
+    await callback.answer()
 
 
 # ============ Admin funksiyalari ============
@@ -66,7 +175,6 @@ def create_excel_if_not_exists():
         ws = wb.active
         ws.title = "Ro'yxat"
 
-        # Sarlavhalar
         headers = [
             "№",
             "Фамилия, исми, шарифи",
@@ -84,7 +192,6 @@ def create_excel_if_not_exists():
             cell.alignment = Alignment(wrap_text=True, vertical='center', horizontal='center')
             cell.border = get_border()
 
-        # Ustun kengliklari
         column_widths = [5, 25, 20, 45, 25, 18, 35, 40]
         for i, width in enumerate(column_widths, 1):
             ws.column_dimensions[chr(64 + i)].width = width
@@ -100,9 +207,8 @@ def save_to_excel(data: dict):
         wb = load_workbook(EXCEL_FILE)
         ws = wb.active
 
-        # Oxirgi qator raqami
         last_row = ws.max_row + 1
-        nomer = last_row - 1  # Sarlavhadan keyin
+        nomer = last_row - 1
 
         row_data = [
             nomer,
@@ -134,7 +240,7 @@ def get_statistics():
 
     wb = load_workbook(EXCEL_FILE)
     ws = wb.active
-    total = ws.max_row - 1  # Sarlavhadan tashqari
+    total = ws.max_row - 1
     return total if total > 0 else 0
 
 
@@ -142,6 +248,10 @@ def get_statistics():
 
 @dp.message_handler(commands=['start'])
 async def cmd_start(message: types.Message):
+    # OBUNANI TEKSHIRISH
+    if not await check_and_request_subscription(message):
+        return
+
     await message.answer(
         "👋 Assalomu alaykum!\n\n"
         "📝 Ro'yxatdan o'tish uchun /register buyrug'ini bosing."
@@ -150,6 +260,10 @@ async def cmd_start(message: types.Message):
 
 @dp.message_handler(commands=['register'])
 async def cmd_register(message: types.Message):
+    # OBUNANI TEKSHIRISH
+    if not await check_and_request_subscription(message):
+        return
+
     await message.answer(
         "📝 <b>Ro'yxatdan o'tish</b>\n\n"
         "✏️ Familiya, ism, sharifingizni kiriting:\n"
@@ -289,7 +403,6 @@ async def cmd_admins(message: types.Message):
         await message.answer("⛔ Sizda ruxsat yo'q!")
         return
 
-    # Statistika
     total = get_statistics()
     admins = load_admins()
 
@@ -302,7 +415,6 @@ async def cmd_admins(message: types.Message):
         "/adminlar - Adminlar ro'yxati\n"
     )
 
-    # Super admin uchun qo'shimcha buyruqlar
     if is_super_admin(message.from_user.id):
         text += (
             "/addadmin - Admin qo'shish\n"
