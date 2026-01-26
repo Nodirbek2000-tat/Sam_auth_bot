@@ -22,10 +22,10 @@ SUPER_ADMIN = 736290914  # Asosiy admin
 
 CHANNELS = [
     # 1-kanal: https://t.me/Samstf
-    ("Samarqand yoshlar ishlari", "Samstf"),
+    ("StartUplar Ofisi", "Samstf"),
 
     # 2-kanal: https://t.me/yiasamyosh
-    ("Yoshlar ilhom akademiyasi", "yiasamyosh"),
+    ("SAMARQANDLIK YOSHLAR", "yiasamyosh"),
 
     # 3-kanal: https://t.me/...
     # ("Kanal nomi", "kanal_username"),
