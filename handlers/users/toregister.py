@@ -25,7 +25,7 @@ CHANNELS = [
     ("Samarqand yoshlar ishlari", "Samstf"),
 
     # 2-kanal: https://t.me/yiasamyosh
-    # ("Yoshlar ilhom akademiyasi", "yiasamyosh"),
+    ("Yoshlar ilhom akademiyasi", "yiasamyosh"),
 
     # 3-kanal: https://t.me/...
     # ("Kanal nomi", "kanal_username"),
