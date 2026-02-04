@@ -451,7 +451,13 @@ async def callback_confirm_create(callback: types.CallbackQuery, state: FSMConte
 async def callback_cancel_create(callback: types.CallbackQuery, state: FSMContext):
     await state.finish()
 
-    await callback.message.edit_text(
+    # ✅ Document xabarini o'chirish va yangi xabar yuborish
+    try:
+        await callback.message.delete()
+    except:
+        pass
+
+    await callback.message.answer(
         "❌ Bekor qilindi.\n\n"
         "/admin - Admin panel"
     )

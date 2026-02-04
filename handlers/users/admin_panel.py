@@ -120,136 +120,145 @@ async def callback_download_stats(callback: types.CallbackQuery):
         await callback.answer("⛔ Sizda ruxsat yo'q!", show_alert=True)
         return
 
+    # ✅ BIRINCHI callback.answer() - 30 sekund muammosi yo'q!
+    await callback.answer()
+
     active_survey = await db.get_active_survey()
 
     if not active_survey:
-        await callback.answer("Aktiv so'rovnoma yo'q!", show_alert=True)
+        await callback.message.answer("⚠️ Aktiv so'rovnoma yo'q!")
         return
 
     fields = await db.get_survey_fields(active_survey['id'])
     responses = await db.get_survey_responses(active_survey['id'])
 
     if not responses:
-        await callback.answer("Javoblar yo'q!", show_alert=True)
+        await callback.message.answer("⚠️ Javoblar yo'q!")
         return
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Javoblar"
+    # Excel tayyorlanmoqda xabari
+    await callback.message.edit_text("⏳ Excel fayl tayyorlanmoqda...")
 
-    headers = ["№"] + [f['column_name'] for f in fields] + ["Sana"]
+    try:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Javoblar"
 
-    border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
-    )
+        headers = ["№"] + [f['column_name'] for f in fields] + ["Sana"]
 
-    # Header
-    for col, header in enumerate(headers, 1):
-        cell = ws.cell(row=1, column=col, value=header)
-        cell.font = Font(bold=True)
-        cell.alignment = Alignment(wrap_text=True, vertical='center', horizontal='center')
-        cell.border = border
-
-    # Ma'lumotlar
-    current_row = 2
-    temp_images = []
-
-    for response in responses:
-        response_data = json.loads(response['response_data']) if isinstance(response['response_data'], str) else \
-        response['response_data']
-
-        ws.cell(row=current_row, column=1, value=current_row - 1).border = border
-
-        for col_idx, field in enumerate(fields, 2):
-            value = response_data.get(field['column_name'], "")
-            cell = ws.cell(row=current_row, column=col_idx)
-            cell.border = border
-
-            # Rasm uchun
-            if field['field_type'] == 'photo' and value:
-                try:
-                    # Rasmni yuklab olish
-                    file = await bot.get_file(value)
-                    file_path = file.file_path
-                    downloaded_file = await bot.download_file(file_path)
-
-                    # Rasmni qayta o'lchamlash
-                    img = Image.open(io.BytesIO(downloaded_file.read()))
-
-                    # Agar rasm juda kichik bo'lsa, kattalashtirish
-                    if img.width < 300 or img.height < 300:
-                        # Rasmni kattalashtirish (yuqori sifat bilan)
-                        img = img.resize((300, 300), Image.Resampling.LANCZOS)
-                    else:
-                        # Rasmni 300x300 ga keltirish (aspect ratio saqlanadi)
-                        img.thumbnail((300, 300), Image.Resampling.LANCZOS)
-
-                    # Temp faylga yuqori sifatda saqlash
-                    temp_img_path = os.path.join(tempfile.gettempdir(), f"temp_img_{current_row}_{col_idx}.png")
-                    img.save(temp_img_path, "PNG", quality=100, optimize=False)
-                    temp_images.append(temp_img_path)
-
-                    # Excel'ga qo'shish
-                    xl_img = XLImage(temp_img_path)
-                    xl_img.width = 300
-                    xl_img.height = 300
-
-                    # Katakchani kattalashtirish
-                    ws.row_dimensions[current_row].height = 230
-                    col_letter = cell.column_letter
-                    ws.column_dimensions[col_letter].width = 42
-
-                    ws.add_image(xl_img, f"{col_letter}{current_row}")
-                    cell.value = ""
-
-                except Exception as e:
-                    cell.value = "📷 Xato"
-                    print(f"Rasm yuklashda xato: {e}")
-
-            # Lokatsiya uchun
-            elif field['field_type'] == 'location' and value:
-                try:
-                    loc = json.loads(value) if isinstance(value, str) else value
-                    link = f"https://maps.google.com/?q={loc['latitude']},{loc['longitude']}"
-                    cell.value = link
-                    cell.alignment = Alignment(wrap_text=True, vertical='center')
-                except:
-                    cell.value = "Lokatsiya"
-
-            else:
-                cell.value = value
-                cell.alignment = Alignment(wrap_text=True, vertical='center')
-
-        # Sana
-        cell = ws.cell(row=current_row, column=len(headers), value=str(response['submitted_at']))
-        cell.border = border
-
-        current_row += 1
-
-    # Oddiy ustunlar uchun kenglik
-    for col in range(1, len(headers) + 1):
-        col_letter = ws.cell(row=1, column=col).column_letter
-        if ws.column_dimensions[col_letter].width == 13.0:  # Default width
-            ws.column_dimensions[col_letter].width = 20
-
-    file_path = os.path.join(tempfile.gettempdir(), active_survey['file_name'])
-    wb.save(file_path)
-
-    with open(file_path, 'rb') as file:
-        await callback.message.answer_document(
-            file,
-            caption=f"📊 <b>{active_survey['name']}</b>\n👥 Jami javoblar: {len(responses)}"
+        border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
         )
 
-    # Temp fayllarni o'chirish
-    os.remove(file_path)
-    for temp_img in temp_images:
-        try:
-            os.remove(temp_img)
-        except:
-            pass
+        # Header
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(wrap_text=True, vertical='center', horizontal='center')
+            cell.border = border
 
-    await callback.answer("Yuklandi!")
+        # Ma'lumotlar
+        current_row = 2
+        temp_images = []
+
+        for response in responses:
+            response_data = json.loads(response['response_data']) if isinstance(response['response_data'], str) else response['response_data']
+
+            ws.cell(row=current_row, column=1, value=current_row - 1).border = border
+
+            for col_idx, field in enumerate(fields, 2):
+                value = response_data.get(field['column_name'], "")
+                cell = ws.cell(row=current_row, column=col_idx)
+                cell.border = border
+
+                # Rasm uchun
+                if field['field_type'] == 'photo' and value:
+                    try:
+                        file = await bot.get_file(value)
+                        file_path = file.file_path
+                        downloaded_file = await bot.download_file(file_path)
+
+                        img = Image.open(io.BytesIO(downloaded_file.read()))
+
+                        if img.width < 300 or img.height < 300:
+                            img = img.resize((300, 300), Image.Resampling.LANCZOS)
+                        else:
+                            img.thumbnail((300, 300), Image.Resampling.LANCZOS)
+
+                        temp_img_path = os.path.join(tempfile.gettempdir(), f"temp_img_{current_row}_{col_idx}.png")
+                        img.save(temp_img_path, "PNG", quality=100, optimize=False)
+                        temp_images.append(temp_img_path)
+
+                        xl_img = XLImage(temp_img_path)
+                        xl_img.width = 300
+                        xl_img.height = 300
+
+                        ws.row_dimensions[current_row].height = 230
+                        col_letter = cell.column_letter
+                        ws.column_dimensions[col_letter].width = 42
+
+                        ws.add_image(xl_img, f"{col_letter}{current_row}")
+                        cell.value = ""
+
+                    except Exception as e:
+                        cell.value = "📷 Xato"
+                        print(f"Rasm yuklashda xato: {e}")
+
+                # Lokatsiya uchun
+                elif field['field_type'] == 'location' and value:
+                    try:
+                        loc = json.loads(value) if isinstance(value, str) else value
+                        link = f"https://maps.google.com/?q={loc['latitude']},{loc['longitude']}"
+                        cell.value = link
+                        cell.alignment = Alignment(wrap_text=True, vertical='center')
+                    except:
+                        cell.value = "Lokatsiya"
+
+                else:
+                    cell.value = value
+                    cell.alignment = Alignment(wrap_text=True, vertical='center')
+
+            # Sana
+            cell = ws.cell(row=current_row, column=len(headers), value=str(response['submitted_at']))
+            cell.border = border
+
+            current_row += 1
+
+        # Oddiy ustunlar uchun kenglik
+        for col in range(1, len(headers) + 1):
+            col_letter = ws.cell(row=1, column=col).column_letter
+            if ws.column_dimensions[col_letter].width == 13.0:
+                ws.column_dimensions[col_letter].width = 20
+
+        file_path = os.path.join(tempfile.gettempdir(), active_survey['file_name'])
+        wb.save(file_path)
+
+        with open(file_path, 'rb') as file:
+            await bot.send_document(
+                callback.from_user.id,
+                file,
+                caption=f"📊 <b>{active_survey['name']}</b>\n👥 Jami javoblar: {len(responses)}"
+            )
+
+        # Temp fayllarni o'chirish
+        os.remove(file_path)
+        for temp_img in temp_images:
+            try:
+                os.remove(temp_img)
+            except:
+                pass
+
+        await callback.message.edit_text(
+            "✅ Excel fayl yuborildi!",
+            reply_markup=get_stats_menu()
+        )
+
+    except Exception as e:
+        print(f"Excel yaratishda xato: {e}")
+        await callback.message.edit_text(
+            "❌ Xatolik yuz berdi!",
+            reply_markup=get_stats_menu()
+        )

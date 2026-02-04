@@ -1,6 +1,14 @@
 from aiogram import types
 from aiogram.dispatcher import FSMContext
 import json
+import os
+import tempfile
+from datetime import datetime
+from docx import Document
+from docx.shared import Pt, Inches, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from PIL import Image
+import io
 
 from loader import dp, db, bot
 from states.states import RegisterState
@@ -12,12 +20,10 @@ from keyboards.inline.buttons import get_options_keyboard, get_confirm_response_
 async def start_register(callback: types.CallbackQuery, state: FSMContext):
     await state.finish()
 
-    # Obuna tekshiruvi
     if not await check_and_request_subscription(bot, db, callback.message):
         await callback.answer()
         return
 
-    # Profil tekshiruvi
     profile = await db.get_user_profile(callback.from_user.id)
 
     if not profile:
@@ -36,7 +42,6 @@ async def start_register(callback: types.CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
-    # Aktiv so'rovnoma tekshiruvi
     survey = await db.get_active_survey()
 
     if not survey:
@@ -74,11 +79,9 @@ async def start_register(callback: types.CallbackQuery, state: FSMContext):
 async def cmd_register(message: types.Message, state: FSMContext):
     await state.finish()
 
-    # Obuna tekshiruvi
     if not await check_and_request_subscription(bot, db, message):
         return
 
-    # Profil tekshiruvi
     profile = await db.get_user_profile(message.from_user.id)
 
     if not profile:
@@ -95,7 +98,6 @@ async def cmd_register(message: types.Message, state: FSMContext):
         )
         return
 
-    # Aktiv so'rovnoma tekshiruvi
     survey = await db.get_active_survey()
 
     if not survey:
@@ -235,7 +237,6 @@ async def process_text_answer(message: types.Message, state: FSMContext):
     fields = data['fields']
     field = fields[current]
 
-    # Faqat text type uchun
     if field['field_type'] != 'text':
         await message.answer("⚠️ Iltimos, to'g'ri formatda javob bering!")
         return
@@ -259,7 +260,6 @@ async def process_photo_answer(message: types.Message, state: FSMContext):
     fields = data['fields']
     field = fields[current]
 
-    # Faqat photo type uchun
     if field['field_type'] != 'photo':
         await message.answer("⚠️ Iltimos, to'g'ri formatda javob bering!")
         return
@@ -283,7 +283,6 @@ async def process_location_answer(message: types.Message, state: FSMContext):
     fields = data['fields']
     field = fields[current]
 
-    # Faqat location type uchun
     if field['field_type'] != 'location':
         await message.answer("⚠️ Iltimos, to'g'ri formatda javob bering!")
         return
@@ -303,6 +302,170 @@ async def process_location_answer(message: types.Message, state: FSMContext):
     await send_question(message, state, edit=False)
 
 
+async def generate_word_document(user_id: int, response_data: dict, fields: list):
+    """WORD fayl yaratish - IDEAL VERSION"""
+
+    doc = Document()
+
+    # Sarlavha - QORA RANG
+    title = doc.add_heading("MA'LUMOTNOMA", level=1)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title.runs[0].font.color.rgb = RGBColor(0, 0, 0)
+    title.paragraph_format.space_after = Pt(12)
+
+    # Ma'lumotlarni olish
+    rahbar = 'Suyunboyev Alisher Isakboevich'
+    tuman = 'Toyloq tumani'
+    mahalla = 'U. mahallasi'
+
+    # Jadvaldan Rahbar, Tuman, Mahalla topish
+    for field in fields:
+        column_name = field['column_name']
+        answer = response_data.get(column_name, "")
+
+        if column_name == 'Rahbar' and answer:
+            rahbar = answer
+
+        if column_name == 'Tuman/Shahar' and answer:
+            tuman = answer
+
+        if column_name == 'Mahalla nomi' and answer:
+            mahalla = answer
+
+    # Rahbar
+    p_rahbar = doc.add_paragraph()
+    p_rahbar.add_run("Rahbar: ").bold = True
+    p_rahbar.add_run(rahbar)
+    p_rahbar.paragraph_format.space_after = Pt(8)
+
+    # Hudud
+    p_hudud = doc.add_paragraph()
+    p_hudud.add_run("Hudud: ").bold = True
+    p_hudud.add_run(f"{tuman}, {mahalla}")
+    p_hudud.paragraph_format.space_after = Pt(8)
+
+    # Skip qilinadigan ustunlar
+    skip_columns = ['Rahbar', 'Tuman/Shahar', 'Mahalla nomi']
+
+    # Dinamik ma'lumotlar
+    temp_images = []
+
+    for i, field in enumerate(fields):
+        column_name = field['column_name']
+
+        if column_name in skip_columns:
+            continue
+
+        answer = response_data.get(column_name, "")
+
+        if field['field_type'] == 'location':
+            continue
+
+        # Savol
+        p = doc.add_paragraph()
+        run = p.add_run(f"{field['column_name']}: ")
+        run.bold = True
+        p.paragraph_format.space_after = Pt(4)
+
+        # Rasm
+        if field['field_type'] == 'photo' and answer:
+            try:
+                file = await bot.get_file(answer)
+                downloaded_file = await bot.download_file(file.file_path)
+
+                img = Image.open(io.BytesIO(downloaded_file.read()))
+                img.thumbnail((500, 500), Image.Resampling.LANCZOS)
+
+                temp_path = os.path.join(tempfile.gettempdir(), f"temp_word_img_{i}.png")
+                img.save(temp_path, "PNG")
+                temp_images.append(temp_path)
+
+                doc.add_picture(temp_path, width=Inches(4))
+                last_p = doc.paragraphs[-1]
+                last_p.paragraph_format.space_after = Pt(10)
+
+            except Exception as e:
+                p.add_run("📷 Rasm yuklanmadi")
+                print(f"Rasm yuklashda xato: {e}")
+
+        # Oddiy javob
+        elif field['field_type'] != 'photo':
+            p.add_run(str(answer) if answer else "—")
+
+    # Statik matn
+    doc.add_paragraph().paragraph_format.space_after = Pt(6)
+
+    h1 = doc.add_paragraph()
+    h1.add_run("Ko'rsatilgan yordam").bold = True
+    h1.paragraph_format.space_after = Pt(8)
+
+    p1 = doc.add_paragraph(
+        "Mazkur murojaat asosida yoshning masalasi belgilangan tartibda ko'rib chiqilib, "
+        "uni Tartibli migratsiya dasturlari doirasida yo'naltirish bo'yicha tegishli amaliy choralar ko'rildi."
+    )
+    p1.paragraph_format.space_after = Pt(12)
+
+    h2 = doc.add_paragraph()
+    h2.add_run("Natija").bold = True
+    h2.paragraph_format.space_after = Pt(8)
+
+    p2 = doc.add_paragraph(
+        "Ko'rilgan chora-tadbirlar natijasida yoshning murojaati ijobiy hal etilib, "
+        "u belgilangan tartibda tartibli migratsiya yo'nalishiga yo'naltirildi hamda barqaror daromad manbaiga ega bo'ldi."
+    )
+    p2.paragraph_format.space_after = Pt(12)
+
+    p3 = doc.add_paragraph(
+        "Mazkur ma'lumotnoma rahbarlar va yoshlar o'rtasida o'tkazilgan uchrashuv natijalari yuzasidan "
+        "rasmiy axborot sifatida tuzildi."
+    )
+    p3.paragraph_format.space_after = Pt(12)
+
+    h3 = doc.add_paragraph()
+    h3.add_run("Tasdiqlaymiz:").bold = True
+    h3.paragraph_format.space_after = Pt(12)
+
+    # Imzolar
+    p_imzo1 = doc.add_paragraph()
+    p_imzo1.add_run("Biriktirilgan rahbar: ").bold = True
+    p_imzo1.add_run(rahbar)
+    p_imzo1.paragraph_format.space_after = Pt(6)
+
+    p_imzo1_sign = doc.add_paragraph("(imzo)")
+    p_imzo1_sign.paragraph_format.space_after = Pt(20)
+
+    p_imzo2 = doc.add_paragraph()
+    p_imzo2.add_run(f"{tuman}, {mahalla} yetakchisi: ").bold = True
+    p_imzo2.add_run("__________________________")
+    p_imzo2.paragraph_format.space_after = Pt(6)
+
+    p_imzo2_sign = doc.add_paragraph("(imzo)")
+    p_imzo2_sign.paragraph_format.space_after = Pt(20)
+
+    # Sana
+    current_date = datetime.now()
+    p_sana = doc.add_paragraph()
+    p_sana.add_run("Sana: «___» __________ ").bold = True
+    p_sana.add_run(f"{current_date.year}-yil")
+    p_sana.paragraph_format.space_after = Pt(20)
+
+    doc.add_paragraph("Asoslovchi xujjatlar ilova qilinadi")
+
+    # Faylni saqlash
+    file_path = os.path.join(tempfile.gettempdir(),
+                             f"malumotnoma_{user_id}_{current_date.strftime('%Y%m%d_%H%M%S')}.docx")
+    doc.save(file_path)
+
+    # Temp rasmlarni o'chirish
+    for temp_img in temp_images:
+        try:
+            os.remove(temp_img)
+        except:
+            pass
+
+    return file_path
+
+
 @dp.callback_query_handler(text="response:confirm", state=RegisterState.answering)
 async def confirm_response(callback: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
@@ -317,10 +480,34 @@ async def confirm_response(callback: types.CallbackQuery, state: FSMContext):
         response_data=response_data
     )
 
-    await callback.message.edit_text(
-        "✅ <b>Rahmat!</b>\n\n"
-        "Sizning javoblaringiz muvaffaqiyatli saqlandi! 🎉"
-    )
+    try:
+        await callback.message.edit_text("⏳ Ma'lumotnoma tayyorlanmoqda...")
+
+        word_file = await generate_word_document(
+            user_id=callback.from_user.id,
+            response_data=response_data,
+            fields=data['fields']
+        )
+
+        with open(word_file, 'rb') as file:
+            await bot.send_document(
+                callback.from_user.id,
+                file,
+                caption=(
+                    "✅ <b>Rahmat!</b>\n\n"
+                    "Sizning javoblaringiz muvaffaqiyatli saqlandi!\n\n"
+                    "📄 Ma'lumotnoma tayyor! 🎉"
+                )
+            )
+
+        os.remove(word_file)
+
+    except Exception as e:
+        print(f"WORD yaratishda xato: {e}")
+        await callback.message.edit_text(
+            "✅ <b>Rahmat!</b>\n\n"
+            "Sizning javoblaringiz muvaffaqiyatli saqlandi! 🎉"
+        )
 
     await state.finish()
     await callback.answer("Muvaffaqiyatli saqlandi!")
