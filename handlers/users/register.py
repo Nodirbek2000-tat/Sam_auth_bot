@@ -317,8 +317,9 @@ async def generate_word_document(user_id: int, response_data: dict, fields: list
     rahbar = 'Suyunboyev Alisher Isakboevich'
     tuman = 'Toyloq tumani'
     mahalla = 'U. mahallasi'
+    yosh_fish = ''
 
-    # Jadvaldan Rahbar, Tuman, Mahalla topish
+    # Jadvaldan Rahbar, Tuman, Mahalla, F.I.Sh topish
     for field in fields:
         column_name = field['column_name']
         answer = response_data.get(column_name, "")
@@ -326,26 +327,29 @@ async def generate_word_document(user_id: int, response_data: dict, fields: list
         if column_name == 'Rahbar' and answer:
             rahbar = answer
 
-        if column_name == 'Tuman/Shahar' and answer:
+        if column_name == 'Tuman/Shahar nomi' and answer:
             tuman = answer
 
         if column_name == 'Mahalla nomi' and answer:
             mahalla = answer
 
-    # Rahbar
-    p_rahbar = doc.add_paragraph()
-    p_rahbar.add_run("Rahbar: ").bold = True
-    p_rahbar.add_run(rahbar)
-    p_rahbar.paragraph_format.space_after = Pt(8)
+        if column_name == 'Biriktirilgan Vakilning F.I.Sh' and answer:
+            yosh_fish = answer
 
-    # Hudud
+    # Rahbar (comment olingan)
+    # p_rahbar = doc.add_paragraph()
+    # p_rahbar.add_run("Rahbar: ").bold = True
+    # p_rahbar.add_run(rahbar)
+    # p_rahbar.paragraph_format.space_after = Pt(8)
+
+    # Hudud - TUMAN, MAHALLA
     p_hudud = doc.add_paragraph()
     p_hudud.add_run("Hudud: ").bold = True
     p_hudud.add_run(f"{tuman}, {mahalla}")
     p_hudud.paragraph_format.space_after = Pt(8)
 
     # Skip qilinadigan ustunlar
-    skip_columns = ['Rahbar', 'Tuman/Shahar', 'Mahalla nomi']
+    skip_columns = ['Rahbar', 'Tuman/Shahar nomi', 'Mahalla nomi', 'Biriktirilgan Yoshning F.I.Sh']
 
     # Dinamik ma'lumotlar
     temp_images = []
@@ -395,45 +399,52 @@ async def generate_word_document(user_id: int, response_data: dict, fields: list
     # Statik matn
     doc.add_paragraph().paragraph_format.space_after = Pt(6)
 
-    h1 = doc.add_paragraph()
-    h1.add_run("Ko'rsatilgan yordam").bold = True
-    h1.paragraph_format.space_after = Pt(8)
-
-    p1 = doc.add_paragraph(
-        "Mazkur murojaat asosida yoshning masalasi belgilangan tartibda ko'rib chiqilib, "
-        "uni Tartibli migratsiya dasturlari doirasida yo'naltirish bo'yicha tegishli amaliy choralar ko'rildi."
-    )
-    p1.paragraph_format.space_after = Pt(12)
-
-    h2 = doc.add_paragraph()
-    h2.add_run("Natija").bold = True
-    h2.paragraph_format.space_after = Pt(8)
-
-    p2 = doc.add_paragraph(
-        "Ko'rilgan chora-tadbirlar natijasida yoshning murojaati ijobiy hal etilib, "
-        "u belgilangan tartibda tartibli migratsiya yo'nalishiga yo'naltirildi hamda barqaror daromad manbaiga ega bo'ldi."
-    )
-    p2.paragraph_format.space_after = Pt(12)
-
-    p3 = doc.add_paragraph(
-        "Mazkur ma'lumotnoma rahbarlar va yoshlar o'rtasida o'tkazilgan uchrashuv natijalari yuzasidan "
-        "rasmiy axborot sifatida tuzildi."
-    )
-    p3.paragraph_format.space_after = Pt(12)
+    # Ko'rsatilgan yordam (comment olingan)
+    # h1 = doc.add_paragraph()
+    # h1.add_run("Ko'rsatilgan yordam").bold = True
+    # h1.paragraph_format.space_after = Pt(8)
+    #
+    # p1 = doc.add_paragraph(
+    #     "Mazkur murojaat asosida yoshning masalasi belgilangan tartibda ko'rib chiqilib, "
+    #     "uni Tartibli migratsiya dasturlari doirasida yo'naltirish bo'yicha tegishli amaliy choralar ko'rildi."
+    # )
+    # p1.paragraph_format.space_after = Pt(12)
+    #
+    # h2 = doc.add_paragraph()
+    # h2.add_run("Natija").bold = True
+    # h2.paragraph_format.space_after = Pt(8)
+    #
+    # p2 = doc.add_paragraph(
+    #     "Ko'rilgan chora-tadbirlar natijasida yoshning murojaati ijobiy hal etilib, "
+    #     "u belgilangan tartibda tartibli migratsiya yo'nalishiga yo'naltirildi hamda barqaror daromad manbaiga ega bo'ldi."
+    # )
+    # p2.paragraph_format.space_after = Pt(12)
+    #
+    # p3 = doc.add_paragraph(
+    #     "Mazkur ma'lumotnoma rahbarlar va yoshlar o'rtasida o'tkazilgan uchrashuv natijalari yuzasidan "
+    #     "rasmiy axborot sifatida tuzildi."
+    # )
+    # p3.paragraph_format.space_after = Pt(12)
 
     h3 = doc.add_paragraph()
     h3.add_run("Tasdiqlaymiz:").bold = True
     h3.paragraph_format.space_after = Pt(12)
 
-    # Imzolar
+    # Imzolar - YOSH F.I.SH QO'SHILGAN
     p_imzo1 = doc.add_paragraph()
     p_imzo1.add_run("Biriktirilgan rahbar: ").bold = True
-    p_imzo1.add_run(rahbar)
+
+    if yosh_fish:
+        p_imzo1.add_run(yosh_fish)
+    else:
+        p_imzo1.add_run(rahbar)
+
     p_imzo1.paragraph_format.space_after = Pt(6)
 
     p_imzo1_sign = doc.add_paragraph("(imzo)")
     p_imzo1_sign.paragraph_format.space_after = Pt(20)
 
+    # Tuman, Mahalla yetakchisi
     p_imzo2 = doc.add_paragraph()
     p_imzo2.add_run(f"{tuman}, {mahalla} yetakchisi: ").bold = True
     p_imzo2.add_run("__________________________")
