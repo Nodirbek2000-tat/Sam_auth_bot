@@ -303,71 +303,42 @@ async def process_location_answer(message: types.Message, state: FSMContext):
 
 
 async def generate_word_document(user_id: int, response_data: dict, fields: list):
-    """WORD fayl yaratish - IDEAL VERSION"""
+    """WORD fayl yaratish - faqat foydalanuvchi kiritgan ma'lumotlar"""
 
     doc = Document()
 
-    # Sarlavha - QORA RANG
-    title = doc.add_heading("MA'LUMOTNOMA", level=1)
+    # Sarlavha - So'rovnoma nomi sifatida
+    title = doc.add_heading("SO'ROVNOMA NATIJALARI", level=1)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     title.runs[0].font.color.rgb = RGBColor(0, 0, 0)
-    title.paragraph_format.space_after = Pt(12)
+    title.paragraph_format.space_after = Pt(16)
 
-    # Ma'lumotlarni olish
-    rahbar = 'Suyunboyev Alisher Isakboevich'
-    tuman = 'Toyloq tumani'
-    mahalla = 'U. mahallasi'
-    yosh_fish = ''
-
-    # Jadvaldan Rahbar, Tuman, Mahalla, F.I.Sh topish
-    for field in fields:
-        column_name = field['column_name']
-        answer = response_data.get(column_name, "")
-
-        if column_name == 'Rahbar' and answer:
-            rahbar = answer
-
-        if column_name == 'Tuman/Shahar nomi' and answer:
-            tuman = answer
-
-        if column_name == 'Mahalla nomi' and answer:
-            mahalla = answer
-
-        if column_name == 'Biriktirilgan Vakilning F.I.Sh' and answer:
-            yosh_fish = answer
-
-    # Rahbar (comment olingan)
-    # p_rahbar = doc.add_paragraph()
-    # p_rahbar.add_run("Rahbar: ").bold = True
-    # p_rahbar.add_run(rahbar)
-    # p_rahbar.paragraph_format.space_after = Pt(8)
-
-    # Hudud - TUMAN, MAHALLA
-    p_hudud = doc.add_paragraph()
-    p_hudud.add_run("Hudud: ").bold = True
-    p_hudud.add_run(f"{tuman}, {mahalla}")
-    p_hudud.paragraph_format.space_after = Pt(8)
-
-    # Skip qilinadigan ustunlar
-    skip_columns = ['Rahbar', 'Tuman/Shahar nomi', 'Mahalla nomi', 'Biriktirilgan Yoshning F.I.Sh']
-
-    # Dinamik ma'lumotlar
+    # Foydalanuvchi kiritgan barcha ma'lumotlarni ko'rsatish
     temp_images = []
 
     for i, field in enumerate(fields):
         column_name = field['column_name']
-
-        if column_name in skip_columns:
-            continue
-
         answer = response_data.get(column_name, "")
 
+        # Lokatsiya - link sifatida ko'rsatish
         if field['field_type'] == 'location':
+            p = doc.add_paragraph()
+            run = p.add_run(f"{column_name}: ")
+            run.bold = True
+            if answer:
+                try:
+                    loc = json.loads(answer) if isinstance(answer, str) else answer
+                    p.add_run(f"{loc['latitude']}, {loc['longitude']}")
+                except:
+                    p.add_run("—")
+            else:
+                p.add_run("—")
+            p.paragraph_format.space_after = Pt(6)
             continue
 
-        # Savol
+        # Savol nomi
         p = doc.add_paragraph()
-        run = p.add_run(f"{field['column_name']}: ")
+        run = p.add_run(f"{column_name}: ")
         run.bold = True
         p.paragraph_format.space_after = Pt(4)
 
@@ -392,79 +363,14 @@ async def generate_word_document(user_id: int, response_data: dict, fields: list
                 p.add_run("📷 Rasm yuklanmadi")
                 print(f"Rasm yuklashda xato: {e}")
 
-        # Oddiy javob
+        # Oddiy javob (text, choice)
         elif field['field_type'] != 'photo':
             p.add_run(str(answer) if answer else "—")
 
-    # Statik matn
-    doc.add_paragraph().paragraph_format.space_after = Pt(6)
-
-    # Ko'rsatilgan yordam (comment olingan)
-    # h1 = doc.add_paragraph()
-    # h1.add_run("Ko'rsatilgan yordam").bold = True
-    # h1.paragraph_format.space_after = Pt(8)
-    #
-    # p1 = doc.add_paragraph(
-    #     "Mazkur murojaat asosida yoshning masalasi belgilangan tartibda ko'rib chiqilib, "
-    #     "uni Tartibli migratsiya dasturlari doirasida yo'naltirish bo'yicha tegishli amaliy choralar ko'rildi."
-    # )
-    # p1.paragraph_format.space_after = Pt(12)
-    #
-    # h2 = doc.add_paragraph()
-    # h2.add_run("Natija").bold = True
-    # h2.paragraph_format.space_after = Pt(8)
-    #
-    # p2 = doc.add_paragraph(
-    #     "Ko'rilgan chora-tadbirlar natijasida yoshning murojaati ijobiy hal etilib, "
-    #     "u belgilangan tartibda tartibli migratsiya yo'nalishiga yo'naltirildi hamda barqaror daromad manbaiga ega bo'ldi."
-    # )
-    # p2.paragraph_format.space_after = Pt(12)
-    #
-    # p3 = doc.add_paragraph(
-    #     "Mazkur ma'lumotnoma rahbarlar va yoshlar o'rtasida o'tkazilgan uchrashuv natijalari yuzasidan "
-    #     "rasmiy axborot sifatida tuzildi."
-    # )
-    # p3.paragraph_format.space_after = Pt(12)
-
-    h3 = doc.add_paragraph()
-    h3.add_run("Tasdiqlaymiz:").bold = True
-    h3.paragraph_format.space_after = Pt(12)
-
-    # Imzolar - YOSH F.I.SH QO'SHILGAN
-    p_imzo1 = doc.add_paragraph()
-    p_imzo1.add_run("Biriktirilgan rahbar: ").bold = True
-
-    if yosh_fish:
-        p_imzo1.add_run(yosh_fish)
-    else:
-        p_imzo1.add_run(rahbar)
-
-    p_imzo1.paragraph_format.space_after = Pt(6)
-
-    p_imzo1_sign = doc.add_paragraph("(imzo)")
-    p_imzo1_sign.paragraph_format.space_after = Pt(20)
-
-    # Tuman, Mahalla yetakchisi
-    p_imzo2 = doc.add_paragraph()
-    p_imzo2.add_run(f"{tuman}, {mahalla} yetakchisi: ").bold = True
-    p_imzo2.add_run("__________________________")
-    p_imzo2.paragraph_format.space_after = Pt(6)
-
-    p_imzo2_sign = doc.add_paragraph("(imzo)")
-    p_imzo2_sign.paragraph_format.space_after = Pt(20)
-
-    # Sana
-    current_date = datetime.now()
-    p_sana = doc.add_paragraph()
-    p_sana.add_run("Sana: «___» __________ ").bold = True
-    p_sana.add_run(f"{current_date.year}-yil")
-    p_sana.paragraph_format.space_after = Pt(20)
-
-    doc.add_paragraph("Asoslovchi xujjatlar ilova qilinadi")
-
     # Faylni saqlash
+    current_date = datetime.now()
     file_path = os.path.join(tempfile.gettempdir(),
-                             f"malumotnoma_{user_id}_{current_date.strftime('%Y%m%d_%H%M%S')}.docx")
+                             f"natija_{user_id}_{current_date.strftime('%Y%m%d_%H%M%S')}.docx")
     doc.save(file_path)
 
     # Temp rasmlarni o'chirish
