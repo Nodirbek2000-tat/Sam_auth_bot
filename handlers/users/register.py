@@ -406,25 +406,36 @@ async def confirm_response(callback: types.CallbackQuery, state: FSMContext):
             fields=data['fields']
         )
 
-        with open(word_file, 'rb') as file:
-            await bot.send_document(
-                callback.from_user.id,
-                file,
-                caption=(
-                    "✅ <b>Rahmat!</b>\n\n"
-                    "Sizning javoblaringiz muvaffaqiyatli saqlandi!\n\n"
-                    "📄 Ma'lumotnoma tayyor! 🎉"
-                )
-            )
+        user = callback.from_user
+        username_part = f"@{user.username}" if user.username else f"ID: {user.id}"
+        caption = (
+            f"📋 <b>Yangi so'rovnoma</b>\n\n"
+            f"👤 Foydalanuvchi: {user.full_name} ({username_part})\n"
+            f"📝 So'rovnoma: <b>{data['survey_name']}</b>"
+        )
+
+        # Kanalga yuborish
+        with open(word_file, 'rb') as f:
+            await bot.send_document("@samfayl", f, caption=caption)
+
+        # Barcha adminlarga yuborish
+        admins = await db.get_all_admins()
+        for admin in admins:
+            try:
+                with open(word_file, 'rb') as f:
+                    await bot.send_document(admin['telegram_id'], f, caption=caption)
+            except Exception:
+                pass
 
         os.remove(word_file)
 
     except Exception as e:
         print(f"WORD yaratishda xato: {e}")
-        await callback.message.edit_text(
-            "✅ <b>Rahmat!</b>\n\n"
-            "Sizning javoblaringiz muvaffaqiyatli saqlandi! 🎉"
-        )
+
+    await callback.message.edit_text(
+        "✅ <b>Rahmat!</b>\n\n"
+        "Sizning javoblaringiz muvaffaqiyatli saqlandi! 🎉"
+    )
 
     await state.finish()
     await callback.answer("Muvaffaqiyatli saqlandi!")
