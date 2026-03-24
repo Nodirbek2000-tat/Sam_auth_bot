@@ -117,10 +117,26 @@ def get_admin_menu():
         InlineKeyboardButton("📊 Statistika", callback_data="admin:stats"),
     )
     keyboard.add(
-        InlineKeyboardButton("📢 Reklama yuborish", callback_data="admin:broadcast")
+        InlineKeyboardButton("📝 Registratsiya", callback_data="admin:registration"),
+        InlineKeyboardButton("📢 Reklama yuborish", callback_data="admin:broadcast"),
     )
     keyboard.add(
         InlineKeyboardButton("❌ Yopish", callback_data="admin:close")
+    )
+    return keyboard
+
+
+def get_registration_toggle_keyboard(is_enabled: bool):
+    """Registratsiya on/off klaviaturasi"""
+    keyboard = InlineKeyboardMarkup(row_width=2)
+    on_text = "✅ On" if is_enabled else "⬜ On"
+    off_text = "⬜ Off" if is_enabled else "✅ Off"
+    keyboard.add(
+        InlineKeyboardButton(on_text, callback_data="registration:on"),
+        InlineKeyboardButton(off_text, callback_data="registration:off"),
+    )
+    keyboard.add(
+        InlineKeyboardButton("🔙 Orqaga", callback_data="admin:back")
     )
     return keyboard
 

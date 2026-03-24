@@ -163,6 +163,15 @@ class Database:
         """
         await self.execute(sql, execute=True)
 
+    async def create_table_settings(self):
+        sql = """
+        CREATE TABLE IF NOT EXISTS settings (
+            key VARCHAR(255) PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        """
+        await self.execute(sql, execute=True)
+
     async def create_all_tables(self):
         await self.create_table_users()
         await self.create_table_admins()
@@ -173,6 +182,7 @@ class Database:
         await self.create_table_surveys()
         await self.create_table_survey_fields()
         await self.create_table_survey_responses()
+        await self.create_table_settings()
 
     # ==================== USERS ====================
 
@@ -457,3 +467,17 @@ class Database:
     async def count_survey_responses(self, survey_id: int):
         sql = "SELECT COUNT(*) FROM survey_responses WHERE survey_id = $1;"
         return await self.execute(sql, survey_id, fetchval=True)
+
+    # ==================== SETTINGS ====================
+
+    async def get_setting(self, key: str, default: str = None):
+        sql = "SELECT value FROM settings WHERE key = $1;"
+        result = await self.execute(sql, key, fetchval=True)
+        return result if result is not None else default
+
+    async def set_setting(self, key: str, value: str):
+        sql = """
+        INSERT INTO settings (key, value) VALUES ($1, $2)
+        ON CONFLICT (key) DO UPDATE SET value = $2;
+        """
+        await self.execute(sql, key, value, execute=True)

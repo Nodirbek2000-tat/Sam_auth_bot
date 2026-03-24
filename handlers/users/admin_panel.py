@@ -10,7 +10,7 @@ import json
 import io
 
 from loader import dp, db, bot
-from keyboards.inline.buttons import get_admin_menu, get_stats_menu
+from keyboards.inline.buttons import get_admin_menu, get_stats_menu, get_registration_toggle_keyboard
 
 
 async def is_admin(user_id: int) -> bool:
@@ -73,6 +73,47 @@ async def callback_admin_close(callback: types.CallbackQuery, state: FSMContext)
     await state.finish()
     await callback.message.delete()
     await callback.answer()
+
+
+@dp.callback_query_handler(text="admin:registration", state='*')
+async def callback_registration_settings(callback: types.CallbackQuery):
+    if not await is_admin(callback.from_user.id):
+        await callback.answer("⛔ Sizda ruxsat yo'q!", show_alert=True)
+        return
+
+    is_enabled = (await db.get_setting("registration_enabled", "true")) == "true"
+    status = "✅ Yoqilgan (On)" if is_enabled else "❌ O'chirilgan (Off)"
+
+    text = (
+        "📝 <b>Registratsiya sozlamasi</b>\n\n"
+        f"Holati: <b>{status}</b>\n\n"
+        "• <b>On</b> — foydalanuvchilar avval registratsiyadan o'tishi kerak\n"
+        "• <b>Off</b> — foydalanuvchilar to'g'ridan-to'g'ri so'rovnomani to'ldiradi"
+    )
+
+    await callback.message.edit_text(text, reply_markup=get_registration_toggle_keyboard(is_enabled))
+    await callback.answer()
+
+
+@dp.callback_query_handler(lambda c: c.data in ["registration:on", "registration:off"], state='*')
+async def callback_toggle_registration(callback: types.CallbackQuery):
+    if not await is_admin(callback.from_user.id):
+        await callback.answer("⛔ Sizda ruxsat yo'q!", show_alert=True)
+        return
+
+    is_enabled = callback.data == "registration:on"
+    await db.set_setting("registration_enabled", "true" if is_enabled else "false")
+
+    status = "✅ Yoqilgan (On)" if is_enabled else "❌ O'chirilgan (Off)"
+    text = (
+        "📝 <b>Registratsiya sozlamasi</b>\n\n"
+        f"Holati: <b>{status}</b>\n\n"
+        "• <b>On</b> — foydalanuvchilar avval registratsiyadan o'tishi kerak\n"
+        "• <b>Off</b> — foydalanuvchilar to'g'ridan-to'g'ri so'rovnomani to'ldiradi"
+    )
+
+    await callback.message.edit_text(text, reply_markup=get_registration_toggle_keyboard(is_enabled))
+    await callback.answer("✅ Saqlandi!")
 
 
 @dp.callback_query_handler(text="admin:stats", state='*')
