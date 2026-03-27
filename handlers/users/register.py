@@ -331,11 +331,6 @@ async def generate_word_document(user_id: int, response_data: dict, fields: list
         if column_name == 'Biriktirilgan Vakilning F.I.Sh' and answer:
             yosh_fish = answer
 
-    p_hudud = doc.add_paragraph()
-    p_hudud.add_run("Hudud: ").bold = True
-    p_hudud.add_run(f"{tuman}, {mahalla}")
-    p_hudud.paragraph_format.space_after = Pt(8)
-
     skip_columns = ['Rahbar', 'Tuman/Shahar nomi', 'Mahalla nomi', 'Biriktirilgan Yoshning F.I.Sh']
     temp_images = []
 
@@ -434,7 +429,7 @@ async def confirm_response(callback: types.CallbackQuery, state: FSMContext):
 
         # Kanalga yuborish
         with open(word_file, 'rb') as f:
-            await bot.send_document("@samauth1", f, caption=caption)
+            await bot.send_document("@startupreest", f, caption=caption)
 
         os.remove(word_file)
 
