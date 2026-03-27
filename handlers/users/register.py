@@ -24,23 +24,26 @@ async def start_register(callback: types.CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
-    profile = await db.get_user_profile(callback.from_user.id)
+    registration_enabled = (await db.get_setting("registration_enabled", "true")) == "true"
 
-    if not profile:
-        await callback.message.edit_text(
-            "⚠️ Avval ma'lumotlaringizni to'ldiring!\n\n"
-            "/start - Boshlash"
-        )
-        await callback.answer()
-        return
+    if registration_enabled:
+        profile = await db.get_user_profile(callback.from_user.id)
 
-    if not profile['is_approved']:
-        await callback.message.edit_text(
-            "⚠️ Sizning profilingiz hali tasdiqlanmagan!\n\n"
-            "Admin tasdiqlashini kuting."
-        )
-        await callback.answer()
-        return
+        if not profile:
+            await callback.message.edit_text(
+                "⚠️ Avval ma'lumotlaringizni to'ldiring!\n\n"
+                "/start - Boshlash"
+            )
+            await callback.answer()
+            return
+
+        if not profile['is_approved']:
+            await callback.message.edit_text(
+                "⚠️ Sizning profilingiz hali tasdiqlanmagan!\n\n"
+                "Admin tasdiqlashini kuting."
+            )
+            await callback.answer()
+            return
 
     survey = await db.get_active_survey()
 
@@ -82,21 +85,24 @@ async def cmd_register(message: types.Message, state: FSMContext):
     if not await check_and_request_subscription(bot, db, message):
         return
 
-    profile = await db.get_user_profile(message.from_user.id)
+    registration_enabled = (await db.get_setting("registration_enabled", "true")) == "true"
 
-    if not profile:
-        await message.answer(
-            "⚠️ Avval ma'lumotlaringizni to'ldiring!\n\n"
-            "/start - Boshlash"
-        )
-        return
+    if registration_enabled:
+        profile = await db.get_user_profile(message.from_user.id)
 
-    if not profile['is_approved']:
-        await message.answer(
-            "⚠️ Sizning profilingiz hali tasdiqlanmagan!\n\n"
-            "Admin tasdiqlashini kuting."
-        )
-        return
+        if not profile:
+            await message.answer(
+                "⚠️ Avval ma'lumotlaringizni to'ldiring!\n\n"
+                "/start - Boshlash"
+            )
+            return
+
+        if not profile['is_approved']:
+            await message.answer(
+                "⚠️ Sizning profilingiz hali tasdiqlanmagan!\n\n"
+                "Admin tasdiqlashini kuting."
+            )
+            return
 
     survey = await db.get_active_survey()
 
