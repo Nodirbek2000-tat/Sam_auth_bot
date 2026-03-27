@@ -303,46 +303,58 @@ async def process_location_answer(message: types.Message, state: FSMContext):
 
 
 async def generate_word_document(user_id: int, response_data: dict, fields: list):
-    """WORD fayl yaratish - faqat foydalanuvchi kiritgan ma'lumotlar"""
+    """WORD fayl yaratish"""
 
     doc = Document()
 
-    # Sarlavha - So'rovnoma nomi sifatida
-    title = doc.add_heading("SO'ROVNOMA NATIJALARI", level=1)
+    # Sarlavha
+    title = doc.add_heading("MA'LUMOTNOMA", level=1)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     title.runs[0].font.color.rgb = RGBColor(0, 0, 0)
-    title.paragraph_format.space_after = Pt(16)
+    title.paragraph_format.space_after = Pt(12)
 
-    # Foydalanuvchi kiritgan barcha ma'lumotlarni ko'rsatish
+    rahbar = 'Suyunboyev Alisher Isakboevich'
+    tuman = 'Toyloq tumani'
+    mahalla = 'U. mahallasi'
+    yosh_fish = ''
+
+    for field in fields:
+        column_name = field['column_name']
+        answer = response_data.get(column_name, "")
+
+        if column_name == 'Rahbar' and answer:
+            rahbar = answer
+        if column_name == 'Tuman/Shahar nomi' and answer:
+            tuman = answer
+        if column_name == 'Mahalla nomi' and answer:
+            mahalla = answer
+        if column_name == 'Biriktirilgan Vakilning F.I.Sh' and answer:
+            yosh_fish = answer
+
+    p_hudud = doc.add_paragraph()
+    p_hudud.add_run("Hudud: ").bold = True
+    p_hudud.add_run(f"{tuman}, {mahalla}")
+    p_hudud.paragraph_format.space_after = Pt(8)
+
+    skip_columns = ['Rahbar', 'Tuman/Shahar nomi', 'Mahalla nomi', 'Biriktirilgan Yoshning F.I.Sh']
     temp_images = []
 
     for i, field in enumerate(fields):
         column_name = field['column_name']
-        answer = response_data.get(column_name, "")
 
-        # Lokatsiya - link sifatida ko'rsatish
-        if field['field_type'] == 'location':
-            p = doc.add_paragraph()
-            run = p.add_run(f"{column_name}: ")
-            run.bold = True
-            if answer:
-                try:
-                    loc = json.loads(answer) if isinstance(answer, str) else answer
-                    p.add_run(f"{loc['latitude']}, {loc['longitude']}")
-                except:
-                    p.add_run("—")
-            else:
-                p.add_run("—")
-            p.paragraph_format.space_after = Pt(6)
+        if column_name in skip_columns:
             continue
 
-        # Savol nomi
+        answer = response_data.get(column_name, "")
+
+        if field['field_type'] == 'location':
+            continue
+
         p = doc.add_paragraph()
-        run = p.add_run(f"{column_name}: ")
+        run = p.add_run(f"{field['column_name']}: ")
         run.bold = True
         p.paragraph_format.space_after = Pt(4)
 
-        # Rasm
         if field['field_type'] == 'photo' and answer:
             try:
                 file = await bot.get_file(answer)
@@ -363,17 +375,14 @@ async def generate_word_document(user_id: int, response_data: dict, fields: list
                 p.add_run("📷 Rasm yuklanmadi")
                 print(f"Rasm yuklashda xato: {e}")
 
-        # Oddiy javob (text, choice)
         elif field['field_type'] != 'photo':
             p.add_run(str(answer) if answer else "—")
 
-    # Faylni saqlash
     current_date = datetime.now()
     file_path = os.path.join(tempfile.gettempdir(),
-                             f"natija_{user_id}_{current_date.strftime('%Y%m%d_%H%M%S')}.docx")
+                             f"malumotnoma_{user_id}_{current_date.strftime('%Y%m%d_%H%M%S')}.docx")
     doc.save(file_path)
 
-    # Temp rasmlarni o'chirish
     for temp_img in temp_images:
         try:
             os.remove(temp_img)
@@ -407,25 +416,25 @@ async def confirm_response(callback: types.CallbackQuery, state: FSMContext):
         )
 
         user = callback.from_user
-        username_part = f"@{user.username}" if user.username else f"ID: {user.id}"
+        profile = await db.get_user_profile(user.id)
+
+        ism = profile['first_name'] if profile else "—"
+        familiya = profile['last_name'] if profile else "—"
+        username_part = f"@{user.username}" if user.username else "—"
+        telegram_id = user.id
+
         caption = (
             f"📋 <b>Yangi so'rovnoma</b>\n\n"
-            f"👤 Foydalanuvchi: {user.full_name} ({username_part})\n"
+            f"👤 Ism: <b>{ism}</b>\n"
+            f"👤 Familiya: <b>{familiya}</b>\n"
+            f"🔗 Akkaunt: {username_part}\n"
+            f"🆔 Telegram ID: <code>{telegram_id}</code>\n"
             f"📝 So'rovnoma: <b>{data['survey_name']}</b>"
         )
 
         # Kanalga yuborish
         with open(word_file, 'rb') as f:
-            await bot.send_document("@samfayl", f, caption=caption)
-
-        # Barcha adminlarga yuborish
-        admins = await db.get_all_admins()
-        for admin in admins:
-            try:
-                with open(word_file, 'rb') as f:
-                    await bot.send_document(admin['telegram_id'], f, caption=caption)
-            except Exception:
-                pass
+            await bot.send_document("@samauth1", f, caption=caption)
 
         os.remove(word_file)
 
